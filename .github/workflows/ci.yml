@@ -18,6 +18,13 @@ permissions:
 
 jobs:
   tap:
+    # A job-level block replaces the top-level one, so it restates contents: read. GitHub checks
+    # every permission a called workflow's jobs declare before any job starts; plugin-ci from
+    # tap#822 on uploads its dependency scan as SARIF, which needs security-events: write. This
+    # grants upload to this repo's Security tab only, never code write.
+    permissions:
+      contents: read
+      security-events: write
     # tap#365 / PR# 373 - tap: plugin-ci fails closed and tests the declared floor. Move
     # this pin to the SHA of tap main once PR# 373 merges (Renovate does not track it).
     uses: unified-systems-com/tap/.github/workflows/plugin-ci.yml@f64030e0ba5376ff6e2121bc7dd1ceddbbda1b96
