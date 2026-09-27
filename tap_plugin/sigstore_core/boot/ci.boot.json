@@ -9,7 +9,8 @@
         "source": {
           "type": "git",
           "url": "https://github.com/unified-systems-com/tap-plugin-identity-core",
-          "rev": "v0.1.2"
+          "rev": "v0.1.2",
+          "commit": "63da037c77355369f91748127a74c7a17e00a7f9"
         },
         "note": "Declared in depends_on. Pinned at v0.1.2, the release current on 2026-09-09. Public repo, no credential (req-tap-plugin-arch-source-secret-5)."
       },
@@ -19,7 +20,8 @@
         "source": {
           "type": "git",
           "url": "https://github.com/unified-systems-com/tap-plugin-sigstore-core",
-          "rev": "v0.3.1"
+          "rev": "v0.3.1",
+          "commit": "9ce5cd700f5744e2810d2991a8600be16a4d8665"
         },
         "note": "Self, pinned like any app-of-apps record — the CONSUMER (plugin-ci boot-and-test, or `spawn --dev-plugins sigstore_core`) substitutes the checkout under test via tap.dev_workspace (req-boot-bootstrap-ci-record-4). Booting this record unflipped runs the pinned revision."
       }
