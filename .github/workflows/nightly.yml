@@ -20,7 +20,7 @@ permissions:
   contents: read
 jobs:
   nightly:
-    uses: unified-systems-com/tap/.github/workflows/plugin-nightly.yml@210409a20ad44e6f747f01bf6da9ccd2cbc04015
+    uses: unified-systems-com/tap/.github/workflows/plugin-nightly.yml@1ffb2417032350ec1d31f0af400c25b225ee66ca
     # REQUIRED on this job. GitHub checks every job of a called workflow — and of the workflows
     # IT calls — against this grant BEFORE starting anything, so a scope missing here fails the
     # whole run at startup with zero jobs and no log. `security-events: write` is plugin-ci's
