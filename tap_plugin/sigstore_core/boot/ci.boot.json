@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "sigstore_core CI record (req-boot-bootstrap-ci-record, tap#365) — the stack this plugin's own tests run in, and the one claim per-plugin CI is allowed to make: that sigstore_core is correct against the dependencies it DECLARES and nothing else. Install set is exactly the depends_on closure (identity_core) plus sigstore_core itself; the consumer flips the self entry to editable so the CHECKOUT under test runs, not the pinned revision. Population is empty: this plugin ships no GRIFT to seed. DELIBERATELY EXCLUDED: every other plugin, all credentials, all required_secrets, and any population step that reaches the network — so a fork can run this lane and a nightly cannot flake on a third party (req-boot-bootstrap-ci-record-5). Reproduce CI exactly: spawn --from 'git+https://github.com/unified-systems-com/tap-plugin-sigstore-core@v0.3.1#ci' --dev-plugins sigstore_core",
+  "description": "sigstore_core CI record (req-boot-bootstrap-ci-record, tap#365) — the stack this plugin's own tests run in, and the one claim per-plugin CI is allowed to make: that sigstore_core is correct against the dependencies it DECLARES and nothing else. Install set is exactly the depends_on closure (identity_core) plus sigstore_core itself; the consumer flips the self entry to editable so the CHECKOUT under test runs, not the pinned revision. Population is empty: this plugin ships no GRIFT to seed. DELIBERATELY EXCLUDED: every other plugin, all credentials, all required_secrets, and any population step that reaches the network — so a fork can run this lane and a nightly cannot flake on a third party (req-boot-bootstrap-ci-record-5). Reproduce CI exactly: spawn --from 'git+https://github.com/unified-systems-com/sigstore-core-tap@<release tag>#ci' --dev-plugins sigstore_core",
   "install": {
     "plugins": [
       {
@@ -8,22 +8,19 @@
         "enabled": true,
         "source": {
           "type": "git",
-          "url": "https://github.com/unified-systems-com/tap-plugin-identity-core",
+          "url": "https://github.com/unified-systems-com/identity-core-tap",
           "rev": "v0.1.2",
           "commit": "63da037c77355369f91748127a74c7a17e00a7f9"
-        },
-        "note": "Declared in depends_on. Pinned at v0.1.2, the release current on 2026-09-09. Public repo, no credential (req-tap-plugin-arch-source-secret-5)."
+        }
       },
       {
         "slug": "sigstore_core",
         "enabled": true,
         "source": {
           "type": "git",
-          "url": "https://github.com/unified-systems-com/tap-plugin-sigstore-core",
-          "rev": "v0.3.1",
-          "commit": "9ce5cd700f5744e2810d2991a8600be16a4d8665"
-        },
-        "note": "Self, pinned like any app-of-apps record — the CONSUMER (plugin-ci boot-and-test, or `spawn --dev-plugins sigstore_core`) substitutes the checkout under test via tap.dev_workspace (req-boot-bootstrap-ci-record-4). Booting this record unflipped runs the pinned revision."
+          "url": "https://github.com/unified-systems-com/sigstore-core-tap",
+          "rev": "v0.4.0"
+        }
       }
     ]
   },
