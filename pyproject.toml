@@ -1,10 +1,10 @@
 # TAP Sigstore Core plugin — package-mode distribution (namespaced 2026-07-01).
-# Identity (conformance gate): slug "sigstore_core" == dist "tap-plugin-sigstore-core"
+# Identity (conformance gate): slug "sigstore_core" == dist "sigstore-core-tap"
 # == namespace "tap_plugin.sigstore_core" == entry-point key. Migrated OUT of
 # [tool.uv.workspace] members; its Tier-0 `sigstore` dep travels with the plugin
 # and uv resolves it when the pre-boot stage installs it (req-plugin-arch-dependencies-1).
 [project]
-name = "tap-plugin-sigstore-core"
+name = "sigstore-core-tap"
 description = "TAP Sigstore Core plugin — Rekor / Fulcio models and Sigstore bundle verify+decompose helpers."
 requires-python = ">=3.14"
 dynamic = ["version"]

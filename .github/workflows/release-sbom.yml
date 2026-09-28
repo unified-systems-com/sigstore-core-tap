@@ -1,4 +1,4 @@
-# Release SBOM + attestations for tap-plugin-sigstore-core.
+# Release SBOM + attestations for sigstore-core-tap.
 #
 # A thin caller (the plugin-ci.yml pattern): on every release tag push, the
 # reusable workflow in the core TAP repo builds the wheel at the tag, generates
