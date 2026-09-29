@@ -32,5 +32,3 @@ jobs:
     with:
       plugin_slug: sigstore_core
       assignee: notgeorge   # no CODEOWNERS in this repo — the org's maintainer login
-    secrets:
-      harness_pat: ${{ secrets.TAP_CORE_RO_PAT }}
