@@ -30,5 +30,3 @@ jobs:
     uses: unified-systems-com/tap/.github/workflows/plugin-ci.yml@baf481c0572c0210c8a89e9c86e552616c7e886c
     with:
       plugin_slug: sigstore_core
-    secrets:
-      harness_pat: ${{ secrets.TAP_CORE_RO_PAT }}
