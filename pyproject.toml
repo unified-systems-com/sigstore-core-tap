@@ -14,7 +14,7 @@ dependencies = [
     "sigstore>=4.2.0",
     # Edge/vocabulary dependency: IDENTITY_VOUCHED_BY_ISSUER targets identity_core__oidc_issuer.
     # Co-install so the type is registered (no code import — pure endpoint reference).
-    "tap-plugin-identity-core",
+    "identity-core-tap",
 ]
 
 [project.entry-points."tap.plugins"]
