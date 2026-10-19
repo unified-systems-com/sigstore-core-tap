@@ -6,11 +6,18 @@ upstream API is contained in this single module: consumer plugins import
 only from ``sigstore_core.*`` and never from ``sigstore.*`` directly.
 
 Spec: plugins/sigstore_core/specs/spec-sigstore-core-v0.md
-(req-sigstore-core-verify, req-sigstore-core-policy, req-sigstore-core-disclosure).
+(req-sigstore-core-verify, req-sigstore-core-policy, req-sigstore-core-disclosure,
+req-sigstore-core-dsse).
 
 v0 supports Sigstore bundles whose verification rests on a Rekor
 transparency-log inclusion proof. RFC3161 timestamp-only bundles are
 rejected with ``failure_code="no_rekor_proof"``.
+
+``verify_dsse_bundle`` is the sibling entry point for bundles whose content is a
+DSSE envelope (in-toto attestations, e.g. the CycloneDX SBOM attestations GitHub
+Actions publishes). It applies the same Rekor-proof fence and the same policy
+translation, and returns the verified payload bytes. Reading the in-toto
+Statement out of that payload lives in ``sigstore_core.statement``.
 """
 
 from __future__ import annotations
@@ -84,6 +91,40 @@ class VerificationResult:
     # The parsed bundle is opaque to consumers; it's passed back to
     # ``decompose.bundle_to_grift_fragment`` to avoid double-parsing. Not
     # part of any serialized representation.
+    parsed_bundle: Bundle | None = field(default=None, repr=False)
+
+
+# DSSE payloadType of an in-toto Statement (https://github.com/in-toto/attestation).
+IN_TOTO_PAYLOAD_TYPE = "application/vnd.in-toto+json"
+
+
+@dataclass
+class DsseVerificationResult:
+    """Structured outcome of a ``verify_dsse_bundle`` call.
+
+    Spec: req-sigstore-core-dsse-1, req-sigstore-core-dsse-2, req-sigstore-core-dsse-4.
+
+    ``signature_verified`` is three-state exactly as on ``VerificationResult``
+    (``None`` = bundle unparseable). ``payload`` and ``payload_type`` are set
+    ONLY when ``signature_verified`` is ``True``: an unverified payload is never
+    handed to a caller. All other fields mirror ``VerificationResult`` and are
+    populated from the cert / log entry as far as the bundle parsed, so a failed
+    identity is still visible.
+    """
+
+    signature_verified: bool | None
+    payload_type: str = ""
+    payload: bytes = b""
+    signed_by: str = ""
+    signing_issuer: str = ""
+    log_key_id: str = ""
+    rekor_log_url: str = ""
+    rekor_log_index: str = ""
+    integrated_time: str = ""
+    entry_kind: str = ""
+    verified_at: str = ""
+    failure_code: str = ""
+    failure_detail: str = ""
     parsed_bundle: Bundle | None = field(default=None, repr=False)
 
 
@@ -340,3 +381,123 @@ def _classify_failure(exc: BaseException) -> str:
     if "Signature" in name:
         return "signature"
     return "unexpected"
+
+
+# Substrings of sigstore-python's plain ``VerificationError`` messages, mapped to
+# failure codes. sigstore-python raises one exception class for nearly every
+# failure, so the class-name match in ``_classify_failure`` cannot tell them
+# apart. Matched against the lower-cased message, first hit wins.
+_DSSE_MESSAGE_CODES: tuple[tuple[str, str], ...] = (
+    ("invalid log entry", "rekor_proof"),
+    ("log entry", "rekor_proof"),
+    ("sct", "cert_chain"),
+    ("certificate", "cert_chain"),
+    ("signing cert", "cert_chain"),
+    ("not enough sources of verified time", "rekor_proof"),
+    ("signature", "signature"),
+)
+
+
+def _classify_dsse_failure(exc: BaseException) -> str:
+    """Failure code for an exception raised by ``Verifier.verify_dsse``."""
+    code = _classify_failure(exc)
+    if code != "unexpected" or type(exc).__name__ != "VerificationError":
+        return code
+    message = str(exc).lower()
+    for needle, mapped in _DSSE_MESSAGE_CODES:
+        if needle in message:
+            return mapped
+    return code
+
+
+def verify_dsse_bundle(
+    bundle_bytes: bytes,
+    *,
+    policy: VerificationPolicy,
+    expected_payload_type: str | None = IN_TOTO_PAYLOAD_TYPE,
+) -> DsseVerificationResult:
+    """Verify a Sigstore bundle carrying a DSSE envelope and return its payload.
+
+    Spec: req-sigstore-core-dsse (canonical DSSE function),
+    req-sigstore-core-dsse-3 (never raises on verification failure),
+    req-sigstore-core-dsse-4 (failure code surfaced),
+    req-sigstore-core-dsse-5 (Rekor-backed only),
+    req-sigstore-core-dsse-6 (policy parity), req-sigstore-core-dsse-7 (payloadType).
+
+    Unlike ``verify_bundle`` there is no ``body`` argument: the signed content IS
+    the envelope payload, which this function returns once the signature, cert
+    chain, Rekor inclusion proof, log-entry consistency and policy all hold.
+
+    Args:
+        bundle_bytes: The Sigstore bundle JSON bytes (v0.3 with ``dsseEnvelope``).
+        policy: A TAP-side policy descriptor (``GitHubWorkflowPolicy``).
+        expected_payload_type: The DSSE ``payloadType`` the caller will accept
+            (default: in-toto). ``None`` disables the check; sigstore-python itself
+            does not validate it, and the type is signed (it is part of the DSSE PAE).
+
+    Returns:
+        A ``DsseVerificationResult``; never raises on a parseable bundle.
+    """
+    result = DsseVerificationResult(signature_verified=None, verified_at=_utc_now_iso())
+
+    try:
+        bundle = Bundle.from_json(bundle_bytes)
+    except (InvalidBundle, ValueError, KeyError) as exc:
+        result.failure_code = "bundle_parse"
+        result.failure_detail = str(exc) or type(exc).__name__
+        return result
+
+    result.parsed_bundle = bundle
+    result.signed_by = _signed_by_from_cert(bundle)
+    result.signing_issuer = _signing_issuer_from_cert(bundle)
+    log_key_id, log_index, integrated_time, entry_kind = _extract_log_data(bundle)
+    result.log_key_id = log_key_id
+    result.rekor_log_index = log_index
+    result.integrated_time = integrated_time
+    result.entry_kind = entry_kind
+    result.rekor_log_url = PUBLIC_GOOD_REKOR_URL
+
+    if getattr(bundle, "_dsse_envelope", None) is None:
+        result.signature_verified = False
+        result.failure_code = "no_dsse_envelope"
+        result.failure_detail = "bundle parsed but carries a message signature, not a DSSE envelope; use verify_bundle"
+        return result
+
+    if not _has_rekor_proof(bundle):
+        result.signature_verified = False
+        result.failure_code = "no_rekor_proof"
+        result.failure_detail = (
+            "bundle parsed but contains no Rekor inclusion proof; RFC3161 timestamp-only verification is deferred"
+        )
+        return result
+
+    try:
+        sigstore_pol = _translate_policy(policy)
+        # Check the policy against the cert first so an identity mismatch is
+        # reported as policy_mismatch rather than whatever sigstore-python's
+        # generic VerificationError text happens to say. verify_dsse re-applies
+        # it, so this is a classification aid, not a second source of truth.
+        try:
+            sigstore_pol.verify(bundle.signing_certificate)
+        except Exception as exc:  # noqa: BLE001  # see req-sigstore-core-dsse-3
+            result.signature_verified = False
+            result.failure_code = "policy_mismatch"
+            result.failure_detail = str(exc) or type(exc).__name__
+            return result
+        payload_type, payload = _get_verifier().verify_dsse(bundle, sigstore_pol)
+    except Exception as exc:  # noqa: BLE001  # see req-sigstore-core-dsse-3
+        result.signature_verified = False
+        result.failure_code = _classify_dsse_failure(exc)
+        result.failure_detail = str(exc) or type(exc).__name__
+        return result
+
+    if expected_payload_type is not None and payload_type != expected_payload_type:
+        result.signature_verified = False
+        result.failure_code = "payload_type_mismatch"
+        result.failure_detail = f"envelope payloadType {payload_type!r} is not the expected {expected_payload_type!r}"
+        return result
+
+    result.signature_verified = True
+    result.payload_type = payload_type
+    result.payload = bytes(payload)
+    return result

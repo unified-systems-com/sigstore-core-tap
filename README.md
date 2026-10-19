@@ -15,6 +15,8 @@ into `sigstore_core` to verify and decompose.
 - Edge types — `ATTESTED_BY_LOG_ENTRY`, `CERT_ISSUED_BY_CA`, `SIGNED_BY_IDENTITY`
 - Python API:
   - `sigstore_core.verify.verify_bundle(body, bundle, *, policy)` — canonical Sigstore-bundle verifier
+  - `sigstore_core.verify.verify_dsse_bundle(bundle, *, policy)` — verifier for DSSE-envelope bundles (in-toto attestations); returns the verified payload bytes
+  - `sigstore_core.statement.extract_predicate(payload, *, expected_subject_sha256, expected_predicate_type)` — checks a verified in-toto Statement and returns the exact predicate bytes (the content-digest input)
   - `sigstore_core.decompose.bundle_to_grift_fragment(...)` — turn a verified bundle into a GRIFT fragment callers merge into their own batch
 
 The `sigstore` Python library is plugin-owned (declared in
@@ -27,7 +29,7 @@ The `sigstore` Python library is plugin-owned (declared in
 - Live Rekor pulling (`rekor.sigstore.dev` queries) — v1 candidate
 - An `oidc_issuer` node or `IDENTITY_VOUCHED_BY_ISSUER` edge — near-soon follow-up
 - `rekor_log_checkpoint` nodes — v1
-- intoto / DSSE attestation statement modeling — future
+- intoto / DSSE attestation statement *modeling* as graph nodes — future (DSSE *verification* and predicate extraction are shipped; see `req-sigstore-core-dsse`)
 - Signing anything — TAP only verifies and decomposes
 - A `sigstore_verification` observation node — v1 candidate when multi-policy / re-verification history becomes load-bearing
 
@@ -89,6 +91,10 @@ in production by samsite's `compliance_collector`, which fetches signed
 `sigstore_ca` nodes and the trust-chain edges are live on the grid. `sigstore`
 is plugin-owned via the uv workspace (`members` entry; removed from the root
 `pyproject.toml`).
+
+DSSE bundles (`verify_dsse_bundle`) are tested against two real recorded GitHub attestation
+bundles using the real verifier and a vendored public-good trust root, offline; one live test
+(`SIGSTORE_CORE_LIVE=1`) exercises the production TUF root.
 
 Deferred to the live-integration harness: happy-path / log-metadata
 verification against a real bundle (`req-sigstore-core-testing-backlog`); v0

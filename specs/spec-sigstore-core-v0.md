@@ -8,6 +8,8 @@
 - **Shape:** Library plugin. v0 registers no collector, no panel, and no page.
 - **Public Python API:**
   - `sigstore_core.verify.verify_bundle(body, bundle, *, policy)` — verifies a Sigstore bundle; returns a `VerificationResult`. See `req-sigstore-core-verify`.
+  - `sigstore_core.verify.verify_dsse_bundle(bundle, *, policy, expected_payload_type=...)` — verifies a Sigstore bundle carrying a DSSE envelope (in-toto attestation) and returns the verified payload bytes in a `DsseVerificationResult`. See `req-sigstore-core-dsse`.
+  - `sigstore_core.statement.extract_predicate(payload, *, expected_subject_sha256, expected_predicate_type)` — checks a verified in-toto Statement's subject digest and `predicateType` and returns the exact predicate bytes. See `req-sigstore-core-statement`.
   - `sigstore_core.decompose.bundle_to_grift_fragment(result, *, anchor_entity_id, policy, dimensions, signing_identity_entity_id=None)` — turns a verified bundle into a `GriftFragment` callers merge into their own GRIFT batch. See `req-sigstore-core-decompose`.
 - **Models** (see `req-sigstore-core-models`): `rekor_log_entry`, `sigstore_ca`.
 - **Edge types** (see `req-sigstore-core-edges`): `ATTESTED_BY_LOG_ENTRY`, `CERT_ISSUED_BY_CA`, `SIGNED_BY_IDENTITY`.
@@ -89,13 +91,15 @@ template to borrow from here.
 | req-sigstore-core-edges | [Edge Vocabulary](#edge-vocabulary) | Implemented | `ATTESTED_BY_LOG_ENTRY`, `CERT_ISSUED_BY_CA`, `SIGNED_BY_IDENTITY`, `IDENTITY_VOUCHED_BY_ISSUER` (hotlinked) |
 | req-sigstore-core-no-collector | [No Collector In v0](#no-collector-in-v0) | Implemented | `apps.py` is `pass`; no `tap_cares` registration |
 | req-sigstore-core-verify | [Verify Helper](#verify-helper) | Implemented | `sigstore_core.verify.verify_bundle(...)` exists with documented signature, three-state result, failure codes, and Rekor-only enforcement. Consumer migration (samsite, `-8`) is done — its inline verify module was removed and it now calls `verify_bundle`. |
+| req-sigstore-core-dsse | [DSSE Verify Helper](#dsse-verify-helper) | Implemented | `sigstore_core.verify.verify_dsse_bundle(...)`: DSSE-envelope bundles (in-toto attestations) verified with the same Rekor fence, policy translation and never-raises contract as `verify_bundle`; returns the verified payload bytes. Tested against real recorded GitHub attestation bundles with a vendored trust root; one gated live test |
+| req-sigstore-core-statement | [In-Toto Statement Helper](#in-toto-statement-helper) | Implemented | `sigstore_core.statement.extract_predicate(...)`: subject sha256 + `predicateType` check; returns the exact predicate bytes from the signed payload (no re-serialisation) |
 | req-sigstore-core-decompose | [Decompose Helper](#decompose-helper) | Implemented | `sigstore_core.decompose.bundle_to_grift_fragment(...)` exists; returns `GriftFragment` with the documented pieces (CA + entry + 2 edges, plus optional `SIGNED_BY_IDENTITY` and hotlinked `IDENTITY_VOUCHED_BY_ISSUER`) |
 | req-sigstore-core-policy | [Verification Policy Shape](#verification-policy-shape) | Implemented | `GitHubWorkflowPolicy` dataclass + translation to `sigstore-python` policy live in `verify.py` |
 | req-sigstore-core-dimensions | [Dimension Strategy](#dimension-strategy) | Implemented | `sigstore.platform`, `sigstore.ca_kind`, `sigstore.log_kind` set on model defaults and edge defaults |
 | req-sigstore-core-python-deps | [Plugin Python Dependency](#plugin-python-dependency) | Implemented | `sigstore` is plugin-owned: declared in `plugins/sigstore_core/pyproject.toml`, registered as a `[tool.uv.workspace]` member, removed from the root `pyproject.toml`. Installs via `uv sync --all-packages`, mirroring github_core's PyYAML |
 | req-sigstore-core-disclosure | [Verification Disclosure](#verification-disclosure) | Implemented | Verdict + failure code/detail + applied policy live as `ATTESTED_BY_LOG_ENTRY` edge attributes per the spec |
 | req-sigstore-core-testing-backlog | [Live-Bundle Verification Testing (Backlog)](#live-bundle-verification-testing-backlog) | Backlog | v0 ships hermetic unit tests only; happy-path verification against a real Rekor-backed bundle waits for the platform live-integration harness |
-| req-sigstore-core-nongoals | [v0 Non-Goals](#v0-non-goals) | Implemented | RFC3161 bundles, dedicated verification node, live Rekor pull, OIDC issuer node, checkpoint nodes, witness/cosigning, attestations |
+| req-sigstore-core-nongoals | [v0 Non-Goals](#v0-non-goals) | Implemented | RFC3161 bundles, dedicated verification node, live Rekor pull, OIDC issuer node, checkpoint nodes, witness/cosigning, attestation graph models (DSSE verification itself is in scope: `req-sigstore-core-dsse`) |
 
 ### Plugin Scope
 ----
@@ -420,6 +424,107 @@ refresh side-effect inside `sigstore-python` and the returned result.
 | req-sigstore-core-verify-7 | No Graph Writes | Implemented | `verify_bundle` performs no graph reads or writes. | |
 | req-sigstore-core-verify-8 | Consumers Migrated | Implemented | Once this helper is live, any pre-existing in-consumer verify modules are removed and their callers switched to `sigstore_core.verify.verify_bundle`. | Per-consumer migration steps live in each consumer plugin's own spec. |
 
+### DSSE Verify Helper
+
+RID: `req-sigstore-core-dsse`
+
+Status: `Implemented`
+
+`sigstore_core.verify.verify_dsse_bundle` verifies a Sigstore bundle whose
+content is a DSSE envelope (Sigstore bundle v0.3 `dsseEnvelope`; in practice an
+in-toto Statement such as the CycloneDX SBOM attestations GitHub Actions
+publishes) and returns the verified payload. It is the sibling of
+`verify_bundle`: same module, same cached `Verifier`, same `GitHubWorkflowPolicy`
+translation, same Rekor-proof fence, same never-raises contract.
+
+```python
+def verify_dsse_bundle(
+    bundle_bytes: bytes,
+    *,
+    policy: VerificationPolicy,
+    expected_payload_type: str | None = "application/vnd.in-toto+json",
+) -> DsseVerificationResult
+```
+
+There is no `body` argument: the signed content is the envelope payload.
+`DsseVerificationResult` carries every field of `VerificationResult`
+(`signature_verified`, `signed_by`, `signing_issuer`, `log_key_id`,
+`rekor_log_url`, `rekor_log_index`, `integrated_time`, `entry_kind`,
+`verified_at`, `failure_code`, `failure_detail`, `parsed_bundle`) plus:
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `payload_type` | string | The envelope `payloadType`. Empty unless `signature_verified` is `True`. |
+| `payload` | bytes | The envelope payload bytes, as signed. Empty unless `signature_verified` is `True`. |
+
+Verification is `sigstore-python`'s `Verifier.verify_dsse`: certificate chain to
+the Fulcio root, SCT, policy, Rekor inclusion proof and checkpoint, signing-time
+validity, the DSSE signature over PAE(payloadType, payload), and consistency of
+the Rekor entry body (`dsse` v0.0.1 or `hashedrekord` v0.0.2) with the envelope.
+`sigstore-python` does not validate `payloadType`; this function does.
+
+Failure codes are those of `verify_bundle` plus two DSSE-specific tags:
+`bundle_parse`, `no_dsse_envelope` (parsed, but a message-signature bundle: use
+`verify_bundle`), `no_rekor_proof`, `policy_mismatch`, `cert_chain`,
+`rekor_proof`, `signature`, `payload_type_mismatch`, `unexpected`. The policy is
+checked against the signing certificate before the verifier runs so an identity
+mismatch is always `policy_mismatch`; other `sigstore-python` failures, which
+share one exception class, are classified from the message.
+
+The function does not write to the graph and issues no network calls beyond the
+TUF trust-root refresh inside `sigstore-python`.
+
+#### Acceptance Criteria
+
+| ACID | Title | Status | Description | Notes |
+| --- | --- | :---: | --- | --- |
+| req-sigstore-core-dsse-1 | Canonical DSSE Function | Implemented | `sigstore_core.verify.verify_dsse_bundle` is the single entry point TAP plugins use to verify a DSSE-envelope Sigstore bundle; consumers never import `sigstore.*`. | |
+| req-sigstore-core-dsse-2 | Three-State Result, Payload Only When Verified | Implemented | `signature_verified` is `True`, `False` or `None` (unparseable). `payload` and `payload_type` are populated only when it is `True`; an unverified payload is never returned. | |
+| req-sigstore-core-dsse-3 | Never Raises On Verification Failure | Implemented | A parseable bundle that fails any check, including a tampered payload or an unexpected `sigstore-python` exception, yields `signature_verified=False`, not an exception. | |
+| req-sigstore-core-dsse-4 | Failure Code Surfaced | Implemented | A failed verification populates `failure_code` from the vocabulary above and `failure_detail`. | |
+| req-sigstore-core-dsse-5 | Rekor-Backed Only | Implemented | A bundle lacking a Rekor inclusion proof yields `signature_verified=False`, `failure_code="no_rekor_proof"`, without invoking the verifier. A bundle with no tlog entry at all does not parse (`bundle_parse`). | Same fence as `req-sigstore-core-verify-5`. |
+| req-sigstore-core-dsse-6 | Policy Parity | Implemented | The same `GitHubWorkflowPolicy` descriptor and translation as `verify_bundle` applies: issuer, repository, and optionally workflow identity URI, ref and SHA; any mismatch is `policy_mismatch`. | `req-sigstore-core-policy`. |
+| req-sigstore-core-dsse-7 | Payload Type Checked | Implemented | The envelope `payloadType` must equal `expected_payload_type` (default `application/vnd.in-toto+json`) after the signature verifies, else `payload_type_mismatch`; `None` disables the check. | `payloadType` is part of the signed PAE, so rewriting it in the bundle is a `signature` failure instead. |
+| req-sigstore-core-dsse-8 | Log Metadata From A Real Bundle | Implemented | `rekor_log_index`, `log_key_id`, `integrated_time` and `entry_kind` are populated from a real DSSE bundle. | Covers the DSSE half of `req-sigstore-core-testing-backlog-6`. |
+| req-sigstore-core-dsse-9 | Verifier Shared And Cached | Implemented | `verify_dsse_bundle` uses the same per-worker cached `Verifier` as `verify_bundle` (`req-sigstore-core-verify-6`). | |
+| req-sigstore-core-dsse-10 | Real-Bundle Tests, Offline By Default | Implemented | Tests verify two real recorded GitHub attestation bundles (two different signer workflows) with the real `Verifier` built from a vendored public-good `trusted_root.json`, so negative cases (tampered payload, wrong repository, ref, SHA, issuer, identity, wrong `payloadType`, no Rekor proof) exercise real cryptography with no network. One live test using the production TUF trust root is skipped unless `SIGSTORE_CORE_LIVE=1`. | Fixtures carry a `SOURCE` note in the test module. The vendored root is a test fixture only; production verification always uses the TUF-delivered root. |
+
+### In-Toto Statement Helper
+
+RID: `req-sigstore-core-statement`
+
+Status: `Implemented`
+
+`sigstore_core.statement.extract_predicate(payload, *, expected_subject_sha256,
+expected_predicate_type)` takes the verified payload of a DSSE envelope and
+settles the two questions a consumer must answer before using the attestation:
+is it about the subject I expect, and is it the predicate kind I expect. It
+returns a `StatementPredicate` whose `predicate` is the **exact bytes of the
+`predicate` value inside the signed payload**.
+
+That is the content-digest rule: a consumer that binds content by sha256 over
+the predicate must hash what the signer signed. The helper walks only the
+Statement's top-level keys and slices the predicate's span out of the payload;
+it never parses-and-re-serialises the predicate, so whitespace, key order,
+escapes and number spelling are preserved byte for byte. `predicate_sha256` is
+the hex digest of those bytes.
+
+Failure codes: `statement_parse` (not a UTF-8 JSON object, duplicate top-level
+key, `subject` or `predicateType` unusable), `statement_type` (`_type` is not an
+in-toto Statement v0.1 / v1), `subject_mismatch`, `predicate_type_mismatch`,
+`predicate_missing`. The helper never raises, performs no signature work (call
+it only on `verify_dsse_bundle` output), and makes no network or graph access.
+
+#### Acceptance Criteria
+
+| ACID | Title | Status | Description | Notes |
+| --- | --- | :---: | --- | --- |
+| req-sigstore-core-statement-1 | Exact Predicate Bytes | Implemented | On success `predicate` is a byte-for-byte slice of the payload (including non-ASCII, odd whitespace and non-object values), not a re-serialisation; `predicate_sha256` is its sha256. | Tested on synthetic payloads and on the real SBOM attestations. |
+| req-sigstore-core-statement-2 | Subject Digest Checked | Implemented | At least one `subject[].digest.sha256` must equal the expected digest (case-insensitive, optional `sha256:` prefix); else `subject_mismatch`. | |
+| req-sigstore-core-statement-3 | Predicate Type Checked | Implemented | `predicateType` must equal the expected value; else `predicate_type_mismatch`. | |
+| req-sigstore-core-statement-4 | Never Raises, Fails Closed | Implemented | Malformed, non-UTF-8, non-object, trailing-data or duplicate-key payloads yield `ok=False` with a failure code and an empty `predicate`. | |
+| req-sigstore-core-statement-5 | Pure | Implemented | The module imports nothing from `sigstore.*`, performs no network or graph access. | |
+
 ### Decompose Helper
 ----
 RID: `req-sigstore-core-decompose`
@@ -719,9 +824,11 @@ Out of scope for v0:
 - Private Fulcio or alternate transparency log instances beyond the schema's
   ability to represent them via `ca_kind` and `rekor_log_url`. The plugin's
   models accommodate them; v0 does not exercise that path.
-- intoto / DSSE attestation statement modeling. `entry_kind` distinguishes the
-  shape on the entry; lifting attestation statements to their own node type
-  is a future plugin or future expansion of this one.
+- intoto / DSSE attestation statement *modeling*. DSSE verification and reading
+  the Statement's predicate bytes are in scope (`req-sigstore-core-dsse`,
+  `req-sigstore-core-statement`); lifting attestation statements to their own
+  graph node type is a future plugin or future expansion of this one.
+  `entry_kind` distinguishes the shape on the entry.
 - Producing signatures. TAP verifies and decomposes; it never signs anything.
 - Running a collector of any kind. `sigstore_core` is a library plugin in v0;
   any collector that arrives later does so under its own requirement.
@@ -735,7 +842,7 @@ Out of scope for v0:
 | req-sigstore-core-nongoals-3 | Live Rekor Deferred | Implemented | v0 does not query Rekor over the network. | |
 | req-sigstore-core-nongoals-4 | OIDC Issuer Node Shipped | Implemented | No longer deferred: the OIDC issuer is a real node (`oidc_issuer`, github_core-owned) and `rekor_log_entry —IDENTITY_VOUCHED_BY_ISSUER→ oidc_issuer` is hotlink-backed. `signing_identity_issuer` remains on the entry as the authoritative field the hotlink mirrors. | Shipped 2026-05-29 (OIDC-anchor build); converges with the AWS federation path on one issuer node. |
 | req-sigstore-core-nongoals-5 | Checkpoint Node Deferred | Implemented | v0 captures checkpoint fields on the entry, not as their own node. | |
-| req-sigstore-core-nongoals-6 | Attestation Models Deferred | Implemented | v0 does not lift intoto / DSSE statements to their own node types. | |
+| req-sigstore-core-nongoals-6 | Attestation Models Deferred | Implemented | v0 does not lift intoto / DSSE statements to their own node types. DSSE verification and predicate extraction are shipped (`req-sigstore-core-dsse`). | |
 | req-sigstore-core-nongoals-7 | No Signing | Implemented | The plugin never produces a Sigstore signature. | |
 | req-sigstore-core-nongoals-8 | No Collector | Implemented | No `tap_cares` collector is registered in v0. | |
 
