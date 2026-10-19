@@ -45,6 +45,8 @@ A_FILE = "dsse_sbom_vuln_evidence.bundle.json.gz"
 A_SAN = f"https://github.com/{REPO}/.github/workflows/sbom-vulnerability-evidence.yml@5736329dff506c952b5567260dd82c51adab5d74"
 A_REF = "refs/heads/main"
 A_SHA = "8c0488ad12947a343b7ffabe06332726e98c96b5"
+# Build Signer Digest of fixture A: the commit of the reusable workflow file, the SAN's @<sha>. It is NOT A_SHA.
+A_SIGNER_DIGEST = "5736329dff506c952b5567260dd82c51adab5d74"
 A_SUBJECT = "a9149a88a6239fc7a5351d9854fbff42448d2ed28cc71951a4c2aa2f4aca7750"
 # Fixture B: publish-images.yml (a different signer workflow, SAN pinned by ref).
 B_FILE = "dsse_sbom_publish_images.bundle.json.gz"
@@ -68,6 +70,7 @@ def _policy_a(**overrides: Any) -> GitHubWorkflowPolicy:
         "workflow_identity_uri": A_SAN,
         "workflow_ref": A_REF,
         "workflow_sha": A_SHA,
+        "build_signer_digest": A_SIGNER_DIGEST,
     }
     fields.update(overrides)
     return GitHubWorkflowPolicy(**fields)
@@ -121,6 +124,7 @@ class TestHappyPath:
         assert result.payload_type == IN_TOTO_PAYLOAD_TYPE
         assert result.signed_by == A_SAN
         assert result.signing_issuer == ISSUER
+        assert result.build_signer_digest == A_SIGNER_DIGEST
         assert result.parsed_bundle is not None
         assert result.verified_at.endswith("Z")
 
@@ -161,10 +165,21 @@ class TestPolicyMismatch:
             {"github_repository": "someone-else/tap"},
             {"workflow_ref": "refs/heads/not-main"},
             {"workflow_sha": "0" * 40},
+            {"build_signer_digest": "0" * 40},
+            # A_SHA is the triggering commit, not the signing workflow's: must not pass as the signer digest.
+            {"build_signer_digest": A_SHA},
             {"oidc_issuer": "https://accounts.google.com"},
             {"workflow_identity_uri": B_SAN},
         ],
-        ids=["repository", "workflow_ref", "workflow_sha", "issuer", "identity_uri"],
+        ids=[
+            "repository",
+            "workflow_ref",
+            "workflow_sha",
+            "signer_digest",
+            "signer_digest_is_not_workflow_sha",
+            "issuer",
+            "identity_uri",
+        ],
     )
     def test_wrong_policy_field_fails_closed(self, real_offline_verifier: Verifier, overrides: dict[str, Any]) -> None:
         result = verify_dsse_bundle(_dump(_load(A_FILE)), policy=_policy_a(**overrides))

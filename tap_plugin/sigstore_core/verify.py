@@ -57,6 +57,10 @@ class GitHubWorkflowPolicy:
     workflow_identity_uri: str | None = None
     workflow_ref: str | None = None
     workflow_sha: str | None = None
+    # Fulcio "Build Signer Digest" (OID 1.3.6.1.4.1.57264.1.10): the commit of the workflow FILE
+    # that signed. For a reusable workflow it is the called workflow's commit (the ``@<sha>`` in the
+    # SAN), which is not ``workflow_sha`` (the triggering commit of the calling repository).
+    build_signer_digest: str | None = None
 
 
 # Union alias for future policy descriptors (EmailIdentityPolicy,
@@ -117,6 +121,7 @@ class DsseVerificationResult:
     payload: bytes = b""
     signed_by: str = ""
     signing_issuer: str = ""
+    build_signer_digest: str = ""
     log_key_id: str = ""
     rekor_log_url: str = ""
     rekor_log_index: str = ""
@@ -201,6 +206,18 @@ def _signing_issuer_from_cert(bundle: Bundle) -> str:
     return ""
 
 
+def _build_signer_digest_from_cert(bundle: Bundle) -> str:
+    """The cert's Build Signer Digest (OID .1.10, DER UTF8String) when present, else empty."""
+    try:
+        ext = bundle.signing_certificate.extensions.get_extension_for_oid(
+            x509.ObjectIdentifier("1.3.6.1.4.1.57264.1.10")
+        ).value
+    except x509.ExtensionNotFound:
+        return ""
+    raw: Any = ext.value if hasattr(ext, "value") else ext
+    return _decode_fulcio_issuer(raw)
+
+
 def _extract_log_data(bundle: Bundle) -> tuple[str, str, str, str]:
     """Best-effort extraction of (log_key_id, log_index, integrated_time, entry_kind).
 
@@ -261,6 +278,8 @@ def _translate_policy(p: GitHubWorkflowPolicy) -> sigstore_policy.VerificationPo
         predicates.append(sigstore_policy.GitHubWorkflowRef(p.workflow_ref))
     if p.workflow_sha:
         predicates.append(sigstore_policy.GitHubWorkflowSHA(p.workflow_sha))
+    if p.build_signer_digest:
+        predicates.append(sigstore_policy.OIDCBuildSignerDigest(p.build_signer_digest))
     return sigstore_policy.AllOf(predicates)
 
 
@@ -450,6 +469,7 @@ def verify_dsse_bundle(
     result.parsed_bundle = bundle
     result.signed_by = _signed_by_from_cert(bundle)
     result.signing_issuer = _signing_issuer_from_cert(bundle)
+    result.build_signer_digest = _build_signer_digest_from_cert(bundle)
     log_key_id, log_index, integrated_time, entry_kind = _extract_log_data(bundle)
     result.log_key_id = log_key_id
     result.rekor_log_index = log_index

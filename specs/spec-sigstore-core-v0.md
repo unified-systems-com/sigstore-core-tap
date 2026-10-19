@@ -260,6 +260,7 @@ attributes:
 | `policy_workflow_identity_uri` | string | no | Exact SAN URI the policy required, when supplied. |
 | `policy_workflow_ref` | string | no | Git ref the policy required, when supplied. |
 | `policy_workflow_sha` | string | no | Commit SHA the policy required, when supplied. |
+| `policy_build_signer_digest` | string | no | Build Signer Digest (commit of the signing workflow file) the policy required, when supplied. |
 | `verification_failure_code` | string | no | Short machine-readable failure tag when `signature_verified` is `False` (e.g. `policy_mismatch`, `cert_chain`, `rekor_proof`, `signature`, `bundle_parse`, `unexpected`). Empty when verified. |
 | `verification_failure_detail` | string | no | Human-readable detail string from the verifier when `signature_verified` is `False`. Empty when verified. |
 
@@ -454,6 +455,7 @@ There is no `body` argument: the signed content is the envelope payload.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
+| `build_signer_digest` | string | The cert's Build Signer Digest, when present (populated whenever the bundle parsed). |
 | `payload_type` | string | The envelope `payloadType`. Empty unless `signature_verified` is `True`. |
 | `payload` | bytes | The envelope payload bytes, as signed. Empty unless `signature_verified` is `True`. |
 
@@ -603,6 +605,7 @@ class GitHubWorkflowPolicy:
     workflow_identity_uri: str | None = None    # exact SAN URI, e.g. "https://github.com/<owner>/<repo>/.github/workflows/<file>@refs/heads/main"
     workflow_ref: str | None = None             # e.g. "refs/heads/main" or "refs/tags/v1.2.3"
     workflow_sha: str | None = None             # commit SHA the workflow ran against (carried in the Fulcio cert; matches a `github_actions_run.head_sha`-style value on the github_core side)
+    build_signer_digest: str | None = None      # Fulcio Build Signer Digest: the commit of the signing workflow FILE (the `@<sha>` of a reusable workflow's SAN)
 ```
 
 `oidc_issuer` and `github_repository` are required (repo-level binding is the
@@ -611,6 +614,7 @@ weakest useful identity check). The optional fields tighten the check:
 - `workflow_identity_uri` — verifies the exact workflow file + ref the cert's SAN must match. Strongest predicate.
 - `workflow_ref` — verifies the Git ref the workflow ran on, independent of which workflow file.
 - `workflow_sha` — verifies the commit SHA.
+- `build_signer_digest` — verifies the Fulcio Build Signer Digest, the commit of the workflow file that signed. For a reusable workflow called from another commit it differs from `workflow_sha` (which is the triggering commit); pin this one to pin the signing workflow's code.
 
 Callers supply whichever predicates they want enforced. Repo-only callers
 keep the optional fields `None` and accept the weaker "some workflow in this
@@ -635,7 +639,7 @@ arrive. The v0 spec does not attempt to enumerate them.
 | ACID | Title | Status | Description | Notes |
 | --- | --- | :---: | --- | --- |
 | req-sigstore-core-policy-1 | Typed Descriptor | Implemented | The `policy` argument is a typed dataclass, not a raw `sigstore-python` policy object. | Keeps `sigstore-python` out of consumer plugins' imports. |
-| req-sigstore-core-policy-2 | GitHub Workflow Policy Shipped | Implemented | `GitHubWorkflowPolicy` is the one concrete policy in v0, with required `oidc_issuer` and `github_repository` plus optional `workflow_identity_uri`, `workflow_ref`, and `workflow_sha` predicates. | |
+| req-sigstore-core-policy-2 | GitHub Workflow Policy Shipped | Implemented | `GitHubWorkflowPolicy` is the one concrete policy in v0, with required `oidc_issuer` and `github_repository` plus optional `workflow_identity_uri`, `workflow_ref`, `workflow_sha` and `build_signer_digest` predicates (`build_signer_digest` is the Fulcio Build Signer Digest, the commit of the signing workflow file; it differs from `workflow_sha` for a reusable workflow called from another commit). | |
 | req-sigstore-core-policy-3 | Applied Predicates Recorded | Implemented | The applied policy predicates are captured on the `ATTESTED_BY_LOG_ENTRY` edge attributes so a reader can tell which checks the verdict relied on. | Required: `policy_kind`, `policy_oidc_issuer`. Optional: repo, identity URI, ref, SHA. |
 | req-sigstore-core-policy-4 | Open To Extension | Implemented | Adding a new policy descriptor does not require changing `verify_bundle`'s signature. | |
 

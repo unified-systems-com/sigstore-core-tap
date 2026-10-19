@@ -73,6 +73,8 @@ def _policy_attrs(policy: VerificationPolicy) -> dict[str, str]:
             attrs["policy_workflow_ref"] = policy.workflow_ref
         if policy.workflow_sha:
             attrs["policy_workflow_sha"] = policy.workflow_sha
+        if policy.build_signer_digest:
+            attrs["policy_build_signer_digest"] = policy.build_signer_digest
         return attrs
     raise TypeError(f"Unknown policy kind: {type(policy).__name__}")
 

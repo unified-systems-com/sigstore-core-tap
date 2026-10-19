@@ -40,6 +40,10 @@
         "type": "string",
         "description": "Commit SHA the policy required, when supplied."
       },
+      "policy_build_signer_digest": {
+        "type": "string",
+        "description": "Build Signer Digest (the commit of the signing workflow file) the policy required, when supplied."
+      },
       "verification_failure_code": {
         "type": "string",
         "description": "Machine-readable failure tag when signature_verified is false: bundle_parse, no_rekor_proof, policy_mismatch, cert_chain, rekor_proof, signature, unexpected. Empty when verified."

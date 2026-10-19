@@ -214,6 +214,7 @@ class TestAttestedByPolicyAttributes:
             workflow_identity_uri="https://github.com/example/repo/.github/workflows/publish.yml@refs/heads/main",
             workflow_ref="refs/heads/main",
             workflow_sha="0123456789abcdef0123456789abcdef01234567",
+            build_signer_digest="fedcba9876543210fedcba9876543210fedcba98",
         )
         fragment = bundle_to_grift_fragment(
             _good_result(),
@@ -222,6 +223,7 @@ class TestAttestedByPolicyAttributes:
             dimensions={},
         )
         attested = next(e for e in fragment.edges if e["edge_type"] == "ATTESTED_BY_LOG_ENTRY__sigstore_core")
+        assert attested["properties"]["policy_build_signer_digest"] == "fedcba9876543210fedcba9876543210fedcba98"
         assert attested["properties"]["policy_workflow_identity_uri"].endswith("@refs/heads/main")
         assert attested["properties"]["policy_workflow_ref"] == "refs/heads/main"
         assert attested["properties"]["policy_workflow_sha"].startswith("0123456789")
@@ -234,7 +236,12 @@ class TestAttestedByPolicyAttributes:
             dimensions={},
         )
         attested = next(e for e in fragment.edges if e["edge_type"] == "ATTESTED_BY_LOG_ENTRY__sigstore_core")
-        for absent_key in ("policy_workflow_identity_uri", "policy_workflow_ref", "policy_workflow_sha"):
+        for absent_key in (
+            "policy_workflow_identity_uri",
+            "policy_workflow_ref",
+            "policy_workflow_sha",
+            "policy_build_signer_digest",
+        ):
             assert absent_key not in attested["properties"]
 
 
