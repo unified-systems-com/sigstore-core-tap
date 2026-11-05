@@ -1,6 +1,6 @@
 manifest_version = "0"
 plugin_version = "0.5.1" # x-release-please-version
-requires_tap = ">=0.3.0"
+requires_tap = ">=0.3.1"
 slug = "sigstore_core"
 name = "TAP Sigstore Core"
 description = "Sigstore-ecosystem models and the canonical TAP-side helpers for verifying Sigstore signature bundles and decomposing them into graph data."
