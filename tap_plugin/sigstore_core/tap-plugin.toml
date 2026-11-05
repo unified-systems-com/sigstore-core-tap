@@ -23,4 +23,4 @@ REQUESTS_SIGSTORE_SIGNATURE__sigstore_core = "edges/REQUESTS_SIGSTORE_SIGNATURE.
 [[boot.records]]
 name = "ci"
 description = "RESERVED NAME (req-boot-bootstrap-ci-record): the stack this plugin's own tests run in — depends_on closure + self, offline, credential-free. The consumer flips self to editable."
-sha256 = "c8880b0cfcc3b260e52581ad35d331efbefeb8c83d984e799c929ac204e1297b"
+sha256 = "6bea95c3dc595740f4bb129899f84f203984e07e7f7116decd49d1405eb9df33"
