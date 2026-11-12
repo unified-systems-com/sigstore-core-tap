@@ -1,0 +1,66 @@
+{
+  "metadata": {
+    "grift_version": "0"
+  },
+  "_reserved": {},
+  "batches": [
+    {
+      "batch_entity": {
+        "entity_id": "01a1d10a-f0af-71cc-af14-cf594c7250f0",
+        "entity_type": "batch",
+        "name": "Sigstore core dimensions v0.1.0",
+        "dimensions": {}
+      },
+      "batch_node": {
+        "source": "plugins.sigstore_core",
+        "name": "Sigstore core dimensions v0.1.0",
+        "description": "Dimension nodes for every dimension key the sigstore_core plugin declares, so each key has a declared node before the dimension map moves to keying by node id (tap#708, tap#711)."
+      },
+      "nodes": [
+        {
+          "entity": {
+            "entity_id": "01a1d10a-f0af-71cc-af14-cf56ff1ac14b",
+            "entity_type": "dimension",
+            "name": "sigstore.platform",
+            "dimensions": {
+              "tap.meta": "dimension"
+            }
+          },
+          "node": {
+            "name": "sigstore.platform",
+            "description": "Which Sigstore deployment a node or edge belongs to, for example the public-good instance. Stamped on every sigstore_core-owned node and edge."
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a1d10a-f0af-71cc-af14-cf5740b9afcb",
+            "entity_type": "dimension",
+            "name": "sigstore.ca_kind",
+            "dimensions": {
+              "tap.meta": "dimension"
+            }
+          },
+          "node": {
+            "name": "sigstore.ca_kind",
+            "description": "The kind of certificate authority a sigstore_ca node is, for example fulcio."
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a1d10a-f0af-71cc-af14-cf58341bc65a",
+            "entity_type": "dimension",
+            "name": "sigstore.log_kind",
+            "dimensions": {
+              "tap.meta": "dimension"
+            }
+          },
+          "node": {
+            "name": "sigstore.log_kind",
+            "description": "The kind of transparency log a log entry belongs to, for example rekor."
+          }
+        }
+      ],
+      "edges": []
+    }
+  ]
+}
