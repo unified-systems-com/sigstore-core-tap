@@ -26,35 +26,58 @@ def _dimension_nodes() -> list[dict]:
     return [n for batch in doc["batches"] for n in batch["nodes"] if n["entity"]["entity_type"] == "dimension"]
 
 
-def _dict_keys(node: ast.AST, named: dict[str, ast.AST]) -> set[str]:
+class UnresolvedDeclaration(AssertionError):
+    """A DEFAULT_DIMENSIONS value this test cannot read exactly: fail closed, never guess empty."""
+
+
+def _dict_keys(node: ast.AST, named: dict[str, list[ast.AST]], where: str) -> set[str]:
     if isinstance(node, ast.Dict):
-        return {k.value for k in node.keys if isinstance(k, ast.Constant) and isinstance(k.value, str)}
-    if isinstance(node, ast.Name) and node.id in named:
-        return _dict_keys(named[node.id], named)
-    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "dict" and node.args:
-        return _dict_keys(node.args[0], named)
-    if isinstance(node, ast.BinOp):  # {**a, **b} spelled a | b
-        return _dict_keys(node.left, named) | _dict_keys(node.right, named)
-    return set()
+        keys: set[str] = set()
+        for key, value in zip(node.keys, node.values, strict=True):
+            if key is None:  # {**OTHER, ...}
+                keys |= _dict_keys(value, named, where)
+            elif isinstance(key, ast.Constant) and isinstance(key.value, str):
+                keys.add(key.value)
+            else:
+                raise UnresolvedDeclaration(f"{where}: a non-literal dimension key")
+        return keys
+    if isinstance(node, ast.Name):
+        bound = named.get(node.id, [])
+        if len(bound) != 1:
+            raise UnresolvedDeclaration(f"{where}: {node.id} has {len(bound)} module-level bindings in the package")
+        return _dict_keys(bound[0], named, where)
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "dict":
+        keys = set()
+        for arg in node.args:
+            keys |= _dict_keys(arg, named, where)
+        for kw in node.keywords:
+            if kw.arg is None:
+                keys |= _dict_keys(kw.value, named, where)
+            else:
+                keys.add(kw.arg)
+        return keys
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
+        return _dict_keys(node.left, named, where) | _dict_keys(node.right, named, where)
+    raise UnresolvedDeclaration(f"{where}: unsupported DEFAULT_DIMENSIONS form {ast.dump(node)[:80]}")
 
 
 def _declared_keys() -> set[str]:
     sources = [p for p in PACKAGE.rglob("*.py") if "tests" not in p.parts and "migrations" not in p.parts]
-    trees = [ast.parse(p.read_text(encoding="utf-8")) for p in sources]
-    named: dict[str, ast.AST] = {}
-    for tree in trees:
+    trees = {p: ast.parse(p.read_text(encoding="utf-8")) for p in sources}
+    named: dict[str, list[ast.AST]] = {}
+    for tree in trees.values():
         for stmt in tree.body:
             if isinstance(stmt, ast.Assign | ast.AnnAssign) and stmt.value is not None:
                 for target in stmt.targets if isinstance(stmt, ast.Assign) else [stmt.target]:
-                    if isinstance(target, ast.Name):
-                        named[target.id] = stmt.value
+                    if isinstance(target, ast.Name) and target.id != "DEFAULT_DIMENSIONS":
+                        named.setdefault(target.id, []).append(stmt.value)
     keys: set[str] = set()
-    for tree in trees:
+    for path, tree in trees.items():
         for node in ast.walk(tree):
             if isinstance(node, ast.Assign | ast.AnnAssign) and node.value is not None:
                 targets = node.targets if isinstance(node, ast.Assign) else [node.target]
                 if any(isinstance(t, ast.Name) and t.id == "DEFAULT_DIMENSIONS" for t in targets):
-                    keys |= _dict_keys(node.value, named)
+                    keys |= _dict_keys(node.value, named, f"{path.relative_to(PACKAGE)}:{node.lineno}")
     for edge in PACKAGE.rglob("*.edge.json"):
         keys |= set(json.loads(edge.read_text(encoding="utf-8")).get("default_dimensions") or {})
     return keys
@@ -73,3 +96,13 @@ def test_the_seed_ids_are_pinned_uuid7s() -> None:
         assert uuid.UUID(node["entity"]["entity_id"]).version == 7, node["entity"]["entity_id"]
         assert node["entity"]["name"] == node["node"]["name"]
         assert node["node"]["description"].strip(), node
+
+
+def test_an_unreadable_declaration_fails_closed() -> None:
+    import pytest
+
+    for source in ("make_dimensions()", "UNBOUND_NAME", "{**make_dimensions()}"):
+        with pytest.raises(UnresolvedDeclaration):
+            _dict_keys(ast.parse(source, mode="eval").body, {}, "probe")
+    named = {"BASE": [ast.parse('{"a.b": "x"}', mode="eval").body]}
+    assert _dict_keys(ast.parse('{**BASE, "c.d": "y"}', mode="eval").body, named, "probe") == {"a.b", "c.d"}
