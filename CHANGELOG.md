@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.3](https://github.com/unified-systems-com/sigstore-core-tap/compare/v0.5.2...v0.5.3) (2026-11-14)
+
+
+### Features
+
+* declare Dimension nodes for this plugin's dimension keys ([56e5365](https://github.com/unified-systems-com/sigstore-core-tap/commit/56e5365ad81ef7eeb51a86c1bed597479ecf08f2))
+* declare Dimension nodes for this plugin's dimension keys (sigstore.platform, sigstore.ca_kind, sigstore.log_kind) ([716764f](https://github.com/unified-systems-com/sigstore-core-tap/commit/716764f1ab0aeb2b31fb91218bb4eb5c4a863475))
+
 ## [0.5.2](https://github.com/unified-systems-com/sigstore-core-tap/compare/v0.5.1...v0.5.2) (2026-11-05)
 
 
