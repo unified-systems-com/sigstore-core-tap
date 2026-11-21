@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.4](https://github.com/unified-systems-com/sigstore-core-tap/compare/v0.5.3...v0.5.4) (2026-11-21)
+
+
+### Bug Fixes
+
+* **deps:** pin dependency sigstore to ==4.5.1 ([dcd0962](https://github.com/unified-systems-com/sigstore-core-tap/commit/dcd0962681a92b99d5035bddfd87540a66441cd3))
+* **deps:** pin dependency sigstore to ==4.5.1 ([0edaf16](https://github.com/unified-systems-com/sigstore-core-tap/commit/0edaf16704cf01dc2d8c1601e25712664eb3b50b))
+
 ## [0.5.3](https://github.com/unified-systems-com/sigstore-core-tap/compare/v0.5.2...v0.5.3) (2026-11-14)
 
 
