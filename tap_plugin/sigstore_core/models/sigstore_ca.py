@@ -12,6 +12,7 @@ from typing import Any, ClassVar
 
 from django.db import models
 
+from tap_grid.event_time import NO_EVENT_TIME
 from tap_grid.models import BaseModel
 
 
@@ -60,6 +61,8 @@ class SigstoreCa(BaseModel):
         "tags": {"validation": "jsonschema", "schema": {"type": "object"}},
     }
     CREATE_REQUIRED: ClassVar[list[str]] = ["ca_url", "ca_kind", "trust_root_source"]
+    # No field states when the CA came to exist; trust_root_fetched_at is a refresh (collection) time.
+    EVENT_TIME = NO_EVENT_TIME
 
     ca_url = models.URLField(max_length=512, blank=True, default="", db_index=True)
     ca_name = models.CharField(max_length=255, blank=True, default="")

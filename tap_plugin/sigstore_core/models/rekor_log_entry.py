@@ -13,6 +13,7 @@ from typing import Any, ClassVar
 
 from django.db import models
 
+from tap_grid.event_time import Moment
 from tap_grid.models import BaseModel
 
 
@@ -93,6 +94,8 @@ class RekorLogEntry(BaseModel):
         "tags": {"validation": "jsonschema", "schema": {"type": "object"}},
     }
     CREATE_REQUIRED: ClassVar[list[str]] = ["log_key_id", "log_index", "integrated_time", "entry_kind"]
+    # Rekor integratedTime: when the log added (published) this entry; stored as UTC "...Z" text.
+    EVENT_TIME = Moment("integrated_time", "published")
 
     log_key_id = models.CharField(max_length=128, blank=True, default="", db_index=True)
     log_index = models.BigIntegerField(null=True, blank=True, db_index=True)
