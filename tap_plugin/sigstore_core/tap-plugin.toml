@@ -1,5 +1,5 @@
 manifest_version = "0"
-plugin_version = "0.5.4" # x-release-please-version
+plugin_version = "0.5.5" # x-release-please-version
 requires_tap = ">=0.5.0"  # 0005_history_event_time depends on tap_grid 0024 (core v0.5.0: event time on history rows)
 slug = "sigstore_core"
 name = "TAP Sigstore Core"
