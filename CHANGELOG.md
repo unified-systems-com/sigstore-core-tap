@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.5](https://github.com/unified-systems-com/sigstore-core-tap/compare/v0.5.4...v0.5.5) (2026-11-25)
+
+
+### Bug Fixes
+
+* ship the history event-time migration on the tap v0.5.0 floor ([ce2bc9a](https://github.com/unified-systems-com/sigstore-core-tap/commit/ce2bc9a8c7f3c0ec147a2d263cc6970945125615))
+* ship the history event-time migration on the tap v0.5.0 floor ([aff3cba](https://github.com/unified-systems-com/sigstore-core-tap/commit/aff3cbad1b19f613b431d0b42bb2d820a0c84ea3))
+
 ## [0.5.4](https://github.com/unified-systems-com/sigstore-core-tap/compare/v0.5.3...v0.5.4) (2026-11-24)
 
 
