@@ -9,8 +9,8 @@
         "source": {
           "type": "git",
           "url": "https://github.com/unified-systems-com/identity-core-tap",
-          "rev": "v0.1.8",
-          "commit": "c6a1d1dc28bfd627533d3adbb3af819910d62d19"
+          "rev": "v0.1.9",
+          "commit": "e25ebb4200179ff0ee4b842292338eb48a5a8994"
         }
       },
       {
