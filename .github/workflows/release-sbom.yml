@@ -24,6 +24,6 @@ jobs:
       contents: read
       id-token: write
       attestations: write
-    uses: unified-systems-com/tap/.github/workflows/plugin-release-sbom.yml@2338a593f89afde5db271d2fad4572539babef1f
+    uses: unified-systems-com/tap/.github/workflows/plugin-release-sbom.yml@21e4e525af68f90e294030f43d74c4abaac7c36f
     with:
       plugin_slug: sigstore_core
